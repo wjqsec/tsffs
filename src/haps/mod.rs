@@ -4,7 +4,7 @@
 //! Handlers for HAPs in the simulator
 
 use std::time::SystemTime;
-
+use std::os::raw::*;
 use crate::{
     arch::ArchitectureOperations,
     magic::MagicNumber,
@@ -19,6 +19,7 @@ use simics::{
         AsConfObject, ConfObject, GenericTransaction, LogLevel,
     },
     debug, get_processor_number, info, trace, warn,
+    sys::mem_op_type_t,
 };
 
 impl Tsffs {
@@ -628,5 +629,53 @@ impl Tsffs {
         }
 
         Ok(())
+    }
+    pub fn on_device_reg_access(
+        &mut self,
+        num_port : u64,
+        data_ptr : *mut u8,
+        data_size : usize,
+        mem_type : mem_op_type_t,
+    )-> Result<()> {
+        if !self.have_initial_snapshot() {
+            //return Ok(())
+        }
+
+        let data_val = match data_size {
+            1 => unsafe { (*(data_ptr as *mut u8)) as u32},
+            2 => unsafe { (*(data_ptr as *mut u16)) as u32},
+            4 => unsafe { (*(data_ptr as *mut u32)) as u32},
+            _ => 0 as u32,
+        };
+        if mem_type == mem_op_type_t::Sim_Trans_Load {
+
+        }
+        else if mem_type == mem_op_type_t::Sim_Trans_Store {
+
+        }
+        else {
+
+        }
+        debug!(
+                self.as_conf_object(),
+                "device access hap {:?} {:#x} {data_size}  {:#x}",mem_type,num_port,data_val
+            );
+        Ok(())
+    }
+    pub fn on_device_access(
+        &mut self,
+        trigger_obj: *mut ConfObject,
+        transaction: *mut GenericTransaction,
+        a : *mut c_char,
+        b : c_int,
+        c : c_int,
+        d: i64,
+
+    ) -> Result<()> {
+        let phy_addr = unsafe { (*transaction).physical_address as u64 };
+        let data_size = unsafe { (*transaction).size as usize };
+        let mem_type = unsafe { (*transaction).type_  };
+        let data_ptr = unsafe { (*transaction).real_address};
+        self.on_device_reg_access(phy_addr,data_ptr,data_size,mem_type)
     }
 }

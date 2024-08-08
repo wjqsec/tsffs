@@ -48,7 +48,7 @@ use simics::{
     break_simulation, class, debug, error, free_attribute, get_class, get_interface,
     get_processor_number, info, lookup_file, object_clock, run_command, run_python, simics_init,
     sys::save_flags_t, trace, version_base, warn, write_configuration_to_file, AsConfObject,
-    BreakpointId, ClassCreate, ClassObjectsFinalize, ConfObject, CoreBreakpointMemopHap,
+    BreakpointId, ClassCreate, ClassObjectsFinalize, ConfObject, CoreBreakpointMemopHap,CoreDeviceAccessMemopHap,InternalDeviceRegAccessHap,
     CoreExceptionHap, CoreMagicInstructionHap, CoreSimulationStoppedHap,
     CpuInstrumentationSubscribeInterface, Event, EventClassFlag, FromConfObject, HapHandle,
     Interface, IntoAttrValueDict,
@@ -540,11 +540,21 @@ pub(crate) struct Tsffs {
     #[attr_value(skip)]
     /// The number of solutions so far
     solutions: usize,
+    #[attr_value(skip)]
+    /// Handle for the core device access
+    device_access_hap_handle: HapHandle,
 }
 
 impl ClassObjectsFinalize for Tsffs {
     unsafe fn objects_finalized(instance: *mut ConfObject) -> simics::Result<()> {
         let tsffs: &'static mut Tsffs = instance.into();
+        tsffs.device_access_hap_handle =
+            InternalDeviceRegAccessHap::add_callback(move |trigger_obj, memop,a,b,c,d| {
+            let tsffs: &'static mut Tsffs = instance.into();
+            tsffs
+                .on_device_access(trigger_obj,memop,a,b,c,d)
+                .expect("Error calling device access callback");
+        })?;
         tsffs.stop_hap_handle = CoreSimulationStoppedHap::add_callback(
             // NOTE: Core_Simulation_Stopped is called with an object, exception and
             // error string, but the exception is always
